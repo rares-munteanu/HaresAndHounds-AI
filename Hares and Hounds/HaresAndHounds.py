@@ -210,31 +210,67 @@ class Game:
             houndsPos = [list(deepcopy(self.pos[hound])) for hound in ["c1", "c2", "c3"]]
             harePos = list(deepcopy(self.pos["i"]))
 
+            # calculam distantele de la iepure la lupi
             dist_hare_hound1 = diagonalDistance(harePos, houndsPos[0])
             dist_hare_hound2 = diagonalDistance(harePos, houndsPos[1])
             dist_hare_hound3 = diagonalDistance(harePos, houndsPos[2])
 
+            # calculam distantele de la iepure la pozitia de start si pozitia "ideala"
+            # unde ar trebui sa ajunga
             dist_hare_goal = diagonalDistance(harePos, goal)
             dist_hare_start = diagonalDistance(harePos, start)
 
             if Game.MAX == "i":
-                score = dist_hare_goal - dist_hare_start
+                # daca computerul joaca cu iepurele
+                # adaugam la scor diferenta dintre pozitia ideala unde
+                # trebuie sa ajunga si pozitia de start adica cu cat este mai aproape
+                # la care mai adaugam distantele fata de lupi
+                score = dist_hare_start - dist_hare_goal
                 for ind in range(len(houndsPos)):
+                    score += [dist_hare_hound1, dist_hare_hound2, dist_hare_hound3][ind]
+                    # daca iepurele se afla in dreapta unui lup
+                    # se adauga distanta de la el le iepure din care se scade unul in sensul ca
+                    # iepurele trebuie sa prefere sa fie cat mai departe de lupi in partea stana
                     if harePos[1] > houndsPos[ind][1]:
                         score += [dist_hare_hound1, dist_hare_hound2, dist_hare_hound3][ind] - 1
+                    # la fel si in partea dreapta
                     elif harePos[1] == houndsPos[ind][1]:
                         score += [dist_hare_hound1, dist_hare_hound2, dist_hare_hound3][ind]
+
+                # euristica functioneaza deoarece iepurele cauta intotdeauna sa ajunga la
+                # pozitia goal si sa pastreze "distanta" fata de lupi
                 return score
             else:  # Game.MAX = "c"
-
+                # daca computerul joaca cu lupii
+                # atunci adaugam la scor media distantei fata de iepure
+                # si pentru fiecare lup la dreapta iepurelui adaugam diferenta
+                # dintre distanta de la iepurel la goal si distanta de la iepure la
+                # acel lup din care scadem 1 deoarece vrem ca lupii
+                # sa tinda sa blocheze iepurele in partea dreapta si nu
+                # sus sau jos (este posibil)
                 score = (dist_hare_hound3 + dist_hare_hound2 + dist_hare_hound1) / 3
                 for ind in range(len(houndsPos)):
                     if harePos[1] > houndsPos[ind][1]:
                         score += dist_hare_goal - [dist_hare_hound1, dist_hare_hound2, dist_hare_hound3][ind] - 1
                     elif harePos[1] == houndsPos[ind][1]:
                         score += [dist_hare_hound1, dist_hare_hound2, dist_hare_hound3][ind]
-
+                # euristica functioneaza deoarece
+                # lupii tind sa blocheze iepurele cat mai spre dreapta tablei
+                # nelasandu l astfel sa treaca de ei in partea stanga ( decat daca
+                # jucatorul cu iepurele joaca perfect in sensul ca exista configuratii in care
+                # jucatorul cu lupii nu mai poate castiga si pierde din cauza mutarilor verticale
+                # succesive
                 return score
+
+    # def heuristic2(self, depth):
+    #     isOver = self.gameOver()
+    #     if isOver == Game.MAX:
+    #         return 999 + depth
+    #     elif isOver == Game.MIN:
+    #         return -999 - depth
+    #     else:
+    #
+    #         pass
 
     def __str__(self):
         sir = toString(self.board, Game.connect)
