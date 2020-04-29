@@ -4,15 +4,10 @@ import HaresAndHoundsGraphics
 import pygame
 
 
-def countBoard(board):
-    nr = 0
-    for ind in range(len(board)):
-        for ind2 in range(len(board[ind])):
-            if board[ind][ind2].isdigit() or board[ind][ind2] == "*":
-                board[ind][ind2] = str((nr := nr + 1))
-    return board
-
-
+# functie care creeaza tabla initiala de joc
+# cu jucatorii in pozitiile initiale
+# tabla are 3 linii si 5 coloane dar pozitiile din colturi
+# sunt considerate pozitii invalide (vezi Game.illegal_moves
 def createBoardHaH():
     board = [["*" for i in range(5)] for x in range(3)]
     board[0][1] = board[1][0] = board[2][1] = "c"
@@ -23,6 +18,19 @@ def createBoardHaH():
     return board
 
 
+# functie care renumeroteaza poziitle libere de pe tabla
+# pentru jucator pentru a alege una cand muta
+def countBoard(board):
+    nr = 0
+    for ind in range(len(board)):
+        for ind2 in range(len(board[ind])):
+            if board[ind][ind2].isdigit() or board[ind][ind2] == "*":
+                board[ind][ind2] = str((nr := nr + 1))
+    return board
+
+
+# functie care printeaza tabla in formatul cerut
+# de joc
 def printHaHBoard(board, connectors):
     for lind in range(len(board)):
         line = board[lind]
@@ -37,6 +45,9 @@ def printHaHBoard(board, connectors):
         print()
 
 
+# functie folosita la __str__  pentru clasa
+# Game pentru a converti tabla intr un string
+# pentru a fi afisata
 def toString(board, connectors):
     lString = ""
     for lind in range(len(board)):
@@ -53,21 +64,38 @@ def toString(board, connectors):
     return lString
 
 
+# functie utilizata la euristica
+def diagonalDistance(start, end):
+    h1 = abs(start[0] - end[0])
+    h2 = abs(start[1] - end[1])
+    return max(h1, h2)
+
+
 class Game:
     noLines = 3
     noCols = 5
+    # connect -> folosit la afisare
     connect = [["/", "|", "\\", "|", "/", "|", "\\"], ["\\", "|", "/", "|", "\\", "|", "/"]]
+    # poziitle din colturi sunt considerate ilegale pentru ca acolo
+    # jocul nu permite sa se face mutari
     illegal_moves = [(0, 0), (0, 4), (2, 0), (2, 4)]
     MIN = None
     MAX = None
 
     def __init__(self, brd=None, playersPos=None, nrOfVM=None):
         self.board = brd or createBoardHaH()
+        # pos = dictionar care retine pozitiile lupilor si a iepurelui
+        # folosit in special la aflarea de mutari libere
         self.pos = playersPos or {"c1": (0, 1), "c2": (1, 0), "c3": (2, 1), "i": (1, 4)}
+        # nrOfVerticalMoves =  numarul de mutari verticale facute
+        # de jucatorul care joaca cu lupii
+        # in ca se fac 10 mutari verticale CONSECUTIVE de catre acest jucator jocul se termina
+        # si castiga jucatorul care joaca cu iepurele
         self.nrOfVerticalMoves = nrOfVM or 0
-        # printHaHBoard(self.board, Game.connect)
-        # print(self)
 
+    # functie care schimba pozitia unui jucator ( lup sau iepure )
+    # intr o alta pozitie si face o copie la toate datele obiectului curent actulizandu-le
+    # si le intoarce pentru a forma un nou obiect de tip Game
     def changePlayer(self, playerPos, newPos):
         localBoard = deepcopy(self.board)
         localPoss = deepcopy(self.pos)
@@ -88,6 +116,9 @@ class Game:
         localBoard = countBoard(localBoard)
         return localBoard, localPoss, localVM
 
+    # functie care afla toate mutarile posibile
+    # pentru configuratia curenta si jucatorul curent = NextPlayer
+    # pe care le returneaza
     def next_moves(self, NextPlayer):
         newGames = []
         if NextPlayer == "i":
@@ -108,6 +139,9 @@ class Game:
 
         return newGames
 
+    # functie ajutatoare pentru a determina toate pozitiile libere
+    # accesibile din pozitia curenta = pos
+    # echivalent cu toate mutarile libere pentru iepure ( deoarece el se poate muta oriunde)
     def getFreeMoves(self, pos):
         # cautam mutarile libere: sus jos stanga dreapta si diagonalele daca este posibil
         moves = [(-1, 0), (1, 0), (0, -1), (0, 1)] + \
@@ -121,13 +155,14 @@ class Game:
             if (local_x, local_y) not in Game.illegal_moves and \
                     0 <= local_x < Game.noLines and 0 <= local_y < len(self.board[local_x]) and \
                     (self.board[local_x][local_y] == "*" or self.board[local_x][local_y].isdigit()):
-                # print(local_x, local_y)
                 freemoves.append((local_x, local_y))
-        # if self.board[pos[0]][pos[1]] == "i":
-        #     print("Mutari libere pt i")
-        #     print(freemoves)
+
         return freemoves
 
+    # functie folosita pentru a determina toate mutarile libere
+    # pentru un lup aflat pe pozitia pos
+    # apeleaza getFreeMoves dupa care daca exista mutari libere spre stanga
+    # nu le ia in considerare
     def getHoundFreeMoves(self, pos):
         freeMoves = self.getFreeMoves(pos)
         houndFreeMoves = []
@@ -138,13 +173,15 @@ class Game:
                 houndFreeMoves.append(move)
         return houndFreeMoves
 
+    # functie returneaza daca iepurele se mai poate misca sau nu
+    # folosita in euristica
     def hareCannotMove(self):
         hareMoves = self.getFreeMoves(self.pos["i"])
-        # if (len(hareMoves) == 0):
-        #     print("Aceasta configuratie nu mai poate muta iepurele\n")
-        #     printHaHBoard(self.board, Game.connect)
         return len(hareMoves) == 0
 
+    # functie utilizata tot in euristica care afla
+    # daca nu mai exista niciun lup in stanga iepurelui
+    # adica daca iepurele a scapat
     def hareEscaped(self):
         houndsPos = [self.pos["c1"], self.pos["c2"], self.pos["c3"]]
         nrOfLeftHounds = 0
@@ -153,17 +190,13 @@ class Game:
                 nrOfLeftHounds += 1
         return nrOfLeftHounds == 0
 
+    # functie care returneaza castigatorul in cazul in care jocul s-a terminat
     def gameOver(self):
         if self.hareEscaped() or self.nrOfVerticalMoves == 10:
             return "i"
         elif self.hareCannotMove():
             return "c"
         return False
-
-    def diagonalDistance(self, start, end):
-        h1 = abs(start[0] - end[0])
-        h2 = abs(start[1] - end[1])
-        return max(h1, h2)
 
     def heuristic(self, depth):
         isOver = self.gameOver()
@@ -177,12 +210,12 @@ class Game:
             houndsPos = [list(deepcopy(self.pos[hound])) for hound in ["c1", "c2", "c3"]]
             harePos = list(deepcopy(self.pos["i"]))
 
-            dist_hare_hound1 = self.diagonalDistance(harePos, houndsPos[0])
-            dist_hare_hound2 = self.diagonalDistance(harePos, houndsPos[1])
-            dist_hare_hound3 = self.diagonalDistance(harePos, houndsPos[2])
+            dist_hare_hound1 = diagonalDistance(harePos, houndsPos[0])
+            dist_hare_hound2 = diagonalDistance(harePos, houndsPos[1])
+            dist_hare_hound3 = diagonalDistance(harePos, houndsPos[2])
 
-            dist_hare_goal = self.diagonalDistance(harePos, goal)
-            dist_hare_start = self.diagonalDistance(harePos, start)
+            dist_hare_goal = diagonalDistance(harePos, goal)
+            dist_hare_start = diagonalDistance(harePos, start)
 
             if Game.MAX == "i":
                 score = dist_hare_goal - dist_hare_start
@@ -302,8 +335,8 @@ def Alpha_Beta_Algorithm(alpha, beta, state):
 
             if beta > newState.score:
                 beta = newState.score
-                if alpha >= beta:  # verific conditia de retezare
-                    break  # NU se mai extind ceilalti fii de tip MAX
+                if alpha >= beta:
+                    break
 
     state.score = state.nextState.score
     return state
@@ -316,7 +349,6 @@ def main():
     validAnswer = False
     algorithm = None
     answer = None
-    gui = None
 
     while not validAnswer:
         answer = input("Doriti sa jucati la consola sau folosind interfata grafica (raspundeti consola sau gui):\n")
@@ -358,6 +390,7 @@ def main():
 
     startingGameTime = int(time.time() * 1000)
 
+    # daca jucatorul doreste sa joaca la consola
     if console:
         print("Tabla de joc initiala:")
         print(newGame)
@@ -366,7 +399,13 @@ def main():
                 validAnswer = False
                 poz = None
                 if currentState.currentPlayer == "i":
+                    # daca jucatorul joca cu iepurele atunci i se va cere doar
+                    # o pozitie din tabla afisata unde doreste sa mute
+                    # poate de asemenea sa introduca "exit" pentru a termina jocul
+
+                    # pozitii libere din pozitia iepurelui
                     hareFreeMoves = currentState.game.getFreeMoves(currentState.game.pos["i"])
+                    # numerele de pe tabla asociate pozitiilor libere
                     freeNumbers = [currentState.game.board[move[0]][move[1]] for move in hareFreeMoves]
                     timeBeforeMoving = int(time.time() * 1000)
                     while not validAnswer:
@@ -382,20 +421,31 @@ def main():
                                 break
                             else:
                                 print("Pozitia trebuie sa fie un numar natural")
+                    # daca jucatorul a scris "exist" se va afisa scorul tablei curente si
+                    # jocul se va termina
                     if playerWantsToExit:
                         print("Score tabla: " + str(currentState.game.heuristic(currentState.depth)))
                         break
+                    # aflam pozitia corespunzatoare cifrei introduse de catre jucator
                     for freeMove in hareFreeMoves:
                         if currentState.game.board[freeMove[0]][freeMove[1]] == str(poz):
                             poz = freeMove
+                    # actualizam datele jocului
                     currentState.game.board, currentState.game.pos, currentState.game.nrOfVerticalMoves = \
                         currentState.game.changePlayer(currentState.game.pos["i"], poz)
                     noOfPlayerMoves += 1
                     timeAfterMoving = int(time.time() * 1000)
                     print("\nJucatorului a mutat in " + str((timeAfterMoving - timeBeforeMoving) / 1000) + " secunde")
                 else:
+                    # daca jucatorul joaca cu lupii
+                    # atunci trebuie sa introduca date despre lupul pe care vrea sa l mute
+                    # si apoi trebuie sa introduca pozitia in care vrea sa l mute
                     line = column = offset = None
                     while not validAnswer:
+                        # aflam linia si coloana lupui pe care vrea sa l mute
+                        # atentie numerotarea liniilor si a coloanelor pentru jucator
+                        # incepe de la 1 ( adica daca vrea sa sa selecteze primul lup de pe prima
+                        # pozitie va introduce 1 1 )
                         line = input("Dati linia corespunzatoare cainelui pe care vreti sa il mutati:")
                         if line.lower() == "exit":
                             playerWantsToExit = True
@@ -404,6 +454,8 @@ def main():
                         if line.isdigit() and column.isdigit():
                             line = int(line)
                             column = int(column)
+                            # offset ul este folosit pentru calculul linie si coloane corecte
+                            # corespunzatoare tablei (care are de fapt numerotarea de la 0)
                             offset = 0 if line - 1 != 1 else 1
                             if line - 1 in range(Game.noLines) and column - offset in \
                                     range(len(currentState.game.board[line - 1]) - (1 - offset)):
@@ -425,6 +477,10 @@ def main():
                     houndFreeMove = currentState.game.getHoundFreeMoves((line - 1, column - offset))
                     freeNumbers = [currentState.game.board[move[0]][move[1]] for move in houndFreeMove]
                     timeBeforeMoving = int(time.time() * 1000)
+
+                    # daca jucatorul a introdus corect o pozitie a unui lup
+                    # se reia codul ca si la iepure
+                    # adica trebuie sa introduca o pozitie unde va vrea sa mute acel lup
                     while not validAnswer:
                         poz = input("Dati pozitia in care vreti sa mutati cainele:")
                         if poz.isdigit():
@@ -446,7 +502,6 @@ def main():
                     for freeMove in houndFreeMove:
                         if currentState.game.board[freeMove[0]][freeMove[1]] == str(poz):
                             poz = freeMove
-                    # print(linie, coloana, poz)
                     currentState.game.board, currentState.game.pos, currentState.game.nrOfVerticalMoves = \
                         currentState.game.changePlayer((line - 1, column - offset), poz)
                     noOfPlayerMoves += 1
@@ -476,8 +531,13 @@ def main():
 
                 if currentState.printOnGameOver():
                     break
+
+    # daca jucatorul vrea sa joace cu ajutorul interfetei grafice
     else:
+        # initializam interfata graficca
         gui = HaresAndHoundsGraphics.GameGui(Game.MAX, currentState.currentPlayer, HaresAndHoundsGraphics.white)
+        # variabilele care incep cu error sunt folosite pentru atentionarea grafica a jucatorului ca incearca sa
+        # faca o mutare invalida
         errorLastTime = None
         errorTime = 1200  # display the errors 1.2 second
         errorPrinted = False
@@ -485,32 +545,52 @@ def main():
         while not gameOver:
             if currentState.currentPlayer == Game.MIN:
                 timeBeforeMoving = int(time.time() * 1000)
+                # daca jucatorul joaca cu iepurele
                 if Game.MIN == "i":
                     doneMoving = False
+                    # obtine pozitiile libere si pozitia curenta a iepurelui
                     hareFreeMoves = currentState.game.getFreeMoves(currentState.game.pos["i"])
                     harePos = currentState.game.pos["i"]
                     while not doneMoving:
+                        # pygame.display.update() -> folosit pentru a afisa noile mutari facute
                         pygame.display.update()
+                        # daca exista vreo eroare afisata pe ecran atunci asteptam un
+                        # anumit timp dupa care eroare dispare pentru a reafisa
+                        # a cui este randul in momentul de fata ( se intelege mai bine daca se
+                        # joaca jocul )
                         if errorPrinted and int(time.time() * 1000) - errorLastTime == errorTime:
                             gui.drawWhoseTurnItIs()
                             errorPrinted = False
                         for event in pygame.event.get():
+                            # daca se apasa X inaine de a se inchide jocul se afiseaza (mai jos)
+                            # scorul tablei si niste date auziliare(in consola)
                             if event.type == pygame.QUIT:
                                 gameOver = True
                                 doneMoving = True
                                 break
                             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                                # daca jucatorul a apasat pe ecran se obtine pozitia
+                                # unde a apast mousePos = coordonatele corespunzatoare
+                                # tablei de joc ( si NU pozitiile pixelilor )
                                 mousePos = gui.mouseInWhatPos(event.pos)
                                 if mousePos:
+                                    # daca a apasat undeva unde se afla un lup
+                                    # se afiseaza o eroare cum ca nu poate muta decat iepurele
+                                    # erorile sunt predefinite in modulul HaresAndHoundsGraphics.py
+                                    # in clasa GameGui
                                     if currentState.game.board[mousePos[0]][mousePos[1]] == "c":
                                         gui.drawErrorText(5)
                                         errorLastTime = int(time.time() * 1000)
                                         errorPrinted = True
-                                    elif mousePos not in hareFreeMoves and currentState.game.board[mousePos[0]][
-                                        mousePos[1]] != "i":
+                                    # daca pozitia nu este una libera ( ori nu e libera ori e prea departata)
+                                    # se afiseaza iar un text "eroare"
+                                    elif mousePos not in hareFreeMoves and \
+                                            currentState.game.board[mousePos[0]][mousePos[1]] != "i":
                                         gui.drawErrorText(2)
                                         errorLastTime = int(time.time() * 1000)
                                         errorPrinted = True
+                                    # daca totul e in regula se face mutarea grafica
+                                    # si apoi se actualizeaza si obiectul de tip State = currentState
                                     elif mousePos in hareFreeMoves:
                                         hareNewPos = gui.moveHare(mousePos)
                                         if hareNewPos:
@@ -523,31 +603,40 @@ def main():
                     selectedHound = None
                     while not doneMoving:
                         pygame.display.update()
+                        # explicat mai sus
                         if errorPrinted and int(time.time() * 1000) - errorLastTime == errorTime:
                             gui.drawWhoseTurnItIs()
                             errorPrinted = False
                         for event in pygame.event.get():
+                            # explicat mai sus
                             if event.type == pygame.QUIT:
                                 gameOver = True
                                 doneMoving = True
                                 break
-                            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # and selected:
+                            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                                # daca joaca cu lupii, jucatorul trebuie mai intai sa selecteze
+                                # un lup ca mai apoi sa l poata muta
                                 mousePos = gui.mouseInWhatPos(event.pos)
                                 if mousePos:
+                                    # se selecteaza (nou) lup
                                     if currentState.game.board[mousePos[0]][mousePos[1]] == "c":
                                         selectedHound = gui.returnSelectedHound(mousePos)
-
+                                    # daca se apasa pe iepure apare eroare
                                     elif currentState.game.board[mousePos[0]][mousePos[1]] == "i":
                                         gui.drawErrorText(4)
                                         errorLastTime = int(time.time() * 1000)
                                         errorPrinted = True
-
+                                    # daca se apasa pe o casuta libera si
+                                    # nu e selctat niciun lup iarasi eroare
                                     elif not selectedHound:
                                         gui.drawErrorText(0)
                                         errorLastTime = int(time.time() * 1000)
                                         errorPrinted = True
 
                                     else:
+                                        # daca totul e in regula se cauta mutarile libere
+                                        # corepunzatoare lupului selectat
+                                        # si se face actualizarea daca s a apasat pe o casuta libera
                                         houndFreeMoves = currentState.game.getHoundFreeMoves(
                                             gui.hareAndHoundsPos[selectedHound])
                                         if mousePos in houndFreeMoves:
@@ -559,28 +648,39 @@ def main():
                                             doneMoving = True
                                         else:
                                             selectedHoundPos = currentState.game.pos[selectedHound]
+                                            # daca s-a incercat mutarea la stanga
+                                            # se afiseaza eroarea (lupii pot muta doar vertical sau doar la dreapta)
                                             if mousePos[1] < selectedHoundPos[1]:
                                                 gui.drawErrorText(3)
                                                 errorLastTime = int(time.time() * 1000)
                                                 errorPrinted = True
                                             else:
+                                                # daca casuta libera este prea departe ( nu e la distanta de 1
+                                                # fata de pozitia lupului selectat)
                                                 gui.drawErrorText(1)
                                                 errorLastTime = int(time.time() * 1000)
                                                 errorPrinted = True
 
+                    # deselectam lupul pentru a-l putea selecta urmatoarea data
                     gui.selectedHounds[selectedHound] = False
+                # daca jucatorul a apast X se inchide fereastra
                 if gameOver:
                     pygame.quit()
                     break
                 currentState.currentPlayer = currentState.oppositePlayer()
+
+                # se schimba playerul curent
+                # si se deseneaza a cui rand este (jucator / calculator )
                 gui.currentPlayer = currentState.currentPlayer
                 gui.drawWhoseTurnItIs()
                 timeAfterMoving = int(time.time() * 1000)
                 noOfPlayerMoves += 1
                 print("\nJucatorului a mutat in " + str((timeAfterMoving - timeBeforeMoving) / 1000) + " secunde")
 
-                if (winner := currentState.printOnGameOver()):
-                    gui.drawFinal(winner, Game.MAX)
+                if winner := currentState.printOnGameOver():
+                    # folosit pentru a afisa si pe
+                    # interfata grafica cine este castigatorul
+                    gui.drawFinal(winner)
                     break
             else:
                 pygame.display.update()
@@ -595,15 +695,18 @@ def main():
                 currentState.currentPlayer = currentState.oppositePlayer()
 
                 gui.currentPlayer = currentState.currentPlayer
+                # se actualizeaza dictionarul de pozitii pentru obiectul de tip GameGui pentru
+                # a sti unde sa deseneze lupii si iepurele
                 gui.hareAndHoundsPos = deepcopy(currentState.game.pos)
                 gui.drawPlayersPos()
                 gui.drawWhoseTurnItIs()
 
                 timeAfterMoving = int(time.time() * 1000)
                 print("Calculatorul a mutat in " + str(timeAfterMoving - timeBeforeMoving) + " milisecunde.\n")
-                if (winner := currentState.printOnGameOver()):
-                    gui.drawFinal(winner, Game.MAX)
+                if winner := currentState.printOnGameOver():
+                    gui.drawFinal(winner)
                     break
+
         if not gameOver:
             pygame.display.update()
             pygame.time.wait(2000)
